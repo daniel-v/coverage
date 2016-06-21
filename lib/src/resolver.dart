@@ -3,6 +3,7 @@ library coverage.resolver;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:package_config/packages_file.dart' as packages_file;
 import 'package:path/path.dart' as p;
 
 /// [Resolver] resolves imports with respect to a given environment.
@@ -11,11 +12,12 @@ class Resolver {
   static const PACKAGE_PREFIX = 'package:';
   static const FILE_PREFIX = 'file://';
 
+  final String packageSpec;
   final String packageRoot;
   final String sdkRoot;
   final List<String> failed = [];
 
-  Resolver({this.packageRoot, this.sdkRoot});
+  Resolver({this.packageSpec, this.packageRoot, this.sdkRoot});
 
   /// Returns the absolute path wrt. to the given environment or null, if the
   /// import could not be resolved.
@@ -46,12 +48,24 @@ class Resolver {
       return resolveSymbolicLinks(filePath);
     }
     if (uri.startsWith(PACKAGE_PREFIX)) {
-      if (packageRoot == null) {
+      if (packageSpec == null && packageRoot == null) {
         // No package-root given, do not resolve package: URIs.
         return null;
+      } else if (packageSpec != null) {
+        print('packagespec is $packageSpec');
+        var source = new File(packageSpec).readAsBytesSync();
+        var map = packages_file.parse(source, new Uri.file(packageSpec));
+
+        var pkgUri = Uri.parse(uri);
+        var pathSegments = pkgUri.pathSegments;
+        var packageName = pathSegments.first;
+        var packagePath = p.fromUri(map[packageName]);
+        var pathInPackage = p.joinAll(pathSegments.sublist(1));
+        return resolveSymbolicLinks(p.join(packagePath, pathInPackage));
+      } else {
+        var path = uri.substring(PACKAGE_PREFIX.length, uri.length);
+        return resolveSymbolicLinks(p.join(packageRoot, path));
       }
-      var path = uri.substring(PACKAGE_PREFIX.length, uri.length);
-      return resolveSymbolicLinks(p.join(packageRoot, path));
     }
     if (uri.startsWith(FILE_PREFIX)) {
       return resolveSymbolicLinks(p.fromUri(Uri.parse(uri)));

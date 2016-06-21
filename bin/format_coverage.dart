@@ -12,6 +12,7 @@ import 'package:path/path.dart';
 class Environment {
   String sdkRoot;
   String pkgRoot;
+  String packageSpec;
   String input;
   IOSink output;
   List<String> reportOn;
@@ -34,6 +35,7 @@ main(List<String> arguments) async {
     print('  # workers: ${env.workers}');
     print('  sdk-root: ${env.sdkRoot}');
     print('  package-root: ${env.pkgRoot}');
+    print('  package-spec: ${env.packageSpec}');
     print('  report-on: ${env.reportOn}');
   }
 
@@ -48,7 +50,9 @@ main(List<String> arguments) async {
   String output;
   var resolver = env.bazel
       ? new BazelResolver(workspacePath: env.bazelWorkspace)
-      : new Resolver(packageRoot: env.pkgRoot, sdkRoot: env.sdkRoot);
+      : new Resolver(packageSpec: env.packageSpec,
+                     packageRoot: env.pkgRoot,
+                     sdkRoot: env.sdkRoot);
   var loader = new Loader();
   if (env.prettyPrint) {
     output = await new PrettyPrintFormatter(resolver, loader)
@@ -86,6 +90,7 @@ Environment parseArgs(List<String> arguments) {
 
   parser.addOption('sdk-root', abbr: 's', help: 'path to the SDK root');
   parser.addOption('package-root', abbr: 'p', help: 'path to the package root');
+  parser.addOption('packages', help: 'path to the package spec file');
   parser.addOption('in', abbr: 'i', help: 'input(s): may be file or directory');
   parser.addOption('out',
       abbr: 'o', defaultsTo: 'stdout', help: 'output: may be file or stdout');
@@ -139,11 +144,22 @@ Environment parseArgs(List<String> arguments) {
     }
   }
 
+  if (args['package-root'] != null && args['packages'] != null) {
+    fail('Only one of --package-root or --packages may be specified.');
+  }
+
+  env.packageSpec = args['packages'];
+  if (env.packageSpec != null) {
+    if (!FileSystemEntity.isFileSync(env.packageSpec)) {
+      fail('Package spec "${args["packages"]}" not found, or not a file.');
+    }
+  }
+
   env.pkgRoot = args['package-root'];
   if (env.pkgRoot != null) {
     env.pkgRoot = absolute(normalize(args['package-root']));
     if (!FileSystemEntity.isDirectorySync(env.pkgRoot)) {
-      fail('Provided package root "${args["package-root"]}" is not directory.');
+      fail('Package root "${args["package-root"]}" is not a directory.');
     }
   }
 
